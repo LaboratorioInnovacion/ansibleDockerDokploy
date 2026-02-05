@@ -1,18 +1,111 @@
-- name: Clone Dokploy repo
+---
+- name: Create Dokploy system user
+  user:
+    name: "{{ dokploy_user }}"
+    system: yes
+    shell: /bin/bash
+    home: "{{ dokploy_install_dir }}"
+    groups: docker
+    append: yes
+    create_home: no
+
+- name: Create Dokploy directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ dokploy_user }}"
+    group: "{{ dokploy_group }}"
+    mode: '0755'
+  loop:
+    - "{{ dokploy_install_dir }}"
+    - "{{ dokploy_database_dir }}"
+
+- name: Check if Dokploy is already cloned
+  stat:
+    path: "{{ dokploy_install_dir }}/.git"
+  register: dokploy_git
+
+- name: Clone Dokploy repository
   git:
     repo: "{{ dokploy_repo }}"
-    dest: "{{ dokploy_dir }}"
-    version: main
-    update: no
-  become: no
+    dest: "{{ dokploy_install_dir }}"
+    version: "{{ dokploy_version }}"
+    force: no
+  become_user: "{{ dokploy_user }}"
+  when: not dokploy_git.stat.exists
 
-- name: Install Dokploy dependencies
-  npm:
-    path: "{{ dokploy_dir }}"
-    production: no
-  become: no
+- name: Update Dokploy repository
+  git:
+    repo: "{{ dokploy_repo }}"
+    dest: "{{ dokploy_install_dir }}"
+    version: "{{ dokploy_version }}"
+    update: yes
+  become_user: "{{ dokploy_user }}"
+  when: dokploy_git.stat.exists
+  register: dokploy_updated
 
-- name: Install Dokploy globally
-  npm:
-    name: "{{ dokploy_dir }}"
-    global: yes
+- name: Install Dokploy dependencies with pnpm
+  command: pnpm install
+  args:
+    chdir: "{{ dokploy_install_dir }}"
+  become_user: "{{ dokploy_user }}"
+  when: not dokploy_git.stat.exists or dokploy_updated.changed
+
+- name: Build Dokploy application
+  command: pnpm run build
+  args:
+    chdir: "{{ dokploy_install_dir }}"
+  become_user: "{{ dokploy_user }}"
+  environment:
+    NODE_ENV: production
+  when: not dokploy_git.stat.exists or dokploy_updated.changed
+
+- name: Create Dokploy Docker network
+  docker_network:
+    name: "{{ dokploy_network }}"
+    state: present
+  become_user: "{{ dokploy_user }}"
+
+- name: Create Dokploy systemd service
+  template:
+    src: dokploy.service.j2
+    dest: /etc/systemd/system/dokploy.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart dokploy
+
+- name: Enable and start Dokploy service
+  systemd:
+    name: dokploy
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: has_systemd | default(true)
+
+- name: Wait for Dokploy to be ready
+  uri:
+    url: "http://localhost:{{ dokploy_port }}"
+    status_code: 200
+    timeout: 5
+  register: dokploy_health
+  until: dokploy_health.status == 200
+  retries: 30
+  delay: 2
+  ignore_errors: yes
+
+- name: Display Dokploy status
+  debug:
+    msg:
+      - "✓ Dokploy installed at: {{ dokploy_install_dir }}"
+      - "✓ Running on port: {{ dokploy_port }}"
+      - "✓ Access at: http://{{ ansible_default_ipv4.address }}:{{ dokploy_port }}"
+      - "✓ Service: systemctl status dokploy"
+  when: dokploy_health is succeeded
+
+- name: Warn if Dokploy is not responding
+  debug:
+    msg:
+      - "⚠️  Dokploy service started but not responding on port {{ dokploy_port }}"
+      - "Check logs: journalctl -u dokploy -f"
+  when: dokploy_health is failed

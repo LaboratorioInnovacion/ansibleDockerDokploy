@@ -1,0 +1,35 @@
+[Unit]
+Description=Dokploy - Self-Hosted PaaS Platform
+After=network.target docker.service
+Requires=docker.service
+Documentation=https://docs.dokploy.com
+
+[Service]
+Type=simple
+User={{ dokploy_user }}
+Group={{ dokploy_group }}
+WorkingDirectory={{ dokploy_install_dir }}
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="PORT={{ dokploy_port }}"
+Environment="DATABASE_PATH={{ dokploy_database_dir }}/dokploy.db"
+
+# Start command
+ExecStart=/usr/bin/pnpm run start
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dokploy
+
+[Install]
+WantedBy=multi-user.target

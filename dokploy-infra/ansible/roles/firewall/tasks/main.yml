@@ -1,0 +1,68 @@
+---
+- name: Check if UFW is installed
+  command: which ufw
+  register: ufw_installed
+  changed_when: false
+  failed_when: false
+
+- name: Set UFW availability fact
+  set_fact:
+    ufw_available: "{{ ufw_installed.rc == 0 }}"
+
+- name: Display firewall status
+  debug:
+    msg: "UFW is {{ 'available' if ufw_available else 'not installed - skipping firewall configuration' }}"
+
+- name: Install UFW if requested and not in WSL
+  apt:
+    name: ufw
+    state: present
+  when: 
+    - firewall_enabled | default(true)
+    - not is_wsl | default(false)
+    - not ufw_available
+
+- name: Set default UFW policies
+  ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+  when: 
+    - ufw_available or (firewall_enabled and not is_wsl)
+
+- name: Allow specified ports through UFW
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ allowed_ports }}"
+  when: 
+    - ufw_available or (firewall_enabled and not is_wsl)
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+  when: 
+    - ufw_available or (firewall_enabled and not is_wsl)
+    - not is_wsl | default(false)
+
+- name: Display UFW status
+  command: ufw status verbose
+  register: ufw_status
+  changed_when: false
+  when: ufw_available or (firewall_enabled and not is_wsl)
+
+- name: Show firewall rules
+  debug:
+    msg: "{{ ufw_status.stdout_lines }}"
+  when: 
+    - ufw_status is defined
+    - ufw_status.stdout_lines is defined
+
+- name: Warn about WSL firewall
+  debug:
+    msg: "⚠️  Running on WSL - firewall managed by Windows. Configure Windows Firewall if needed."
+  when: is_wsl | default(false)

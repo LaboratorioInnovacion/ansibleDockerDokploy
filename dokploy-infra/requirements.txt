@@ -1,0 +1,3 @@
+# Requirements for Ansible Controller
+ansible>=2.14.0
+ansible-core>=2.14.0

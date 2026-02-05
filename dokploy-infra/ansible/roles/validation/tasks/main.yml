@@ -1,0 +1,167 @@
+---
+- name: Validate Docker service is running
+  command: systemctl is-active docker
+  register: docker_service
+  changed_when: false
+  failed_when: false
+  when: has_systemd | default(true)
+
+- name: Check Docker service (non-systemd)
+  command: service docker status
+  register: docker_service_nosystemd
+  changed_when: false
+  failed_when: false
+  when: not has_systemd | default(false)
+
+- name: Validate Docker Compose v2
+  command: docker compose version
+  register: compose_check
+  changed_when: false
+  failed_when: compose_check.rc != 0
+
+- name: Validate user in docker group
+  command: groups {{ ansible_user_id }}
+  register: user_groups
+  changed_when: false
+
+- name: Check docker group membership
+  set_fact:
+    user_in_docker_group: "{{ 'docker' in user_groups.stdout }}"
+
+- name: Fail if user not in docker group
+  fail:
+    msg: "❌ User {{ ansible_user_id }} is not in docker group. Re-login may be required."
+  when: not user_in_docker_group
+
+- name: Test Docker without sudo
+  command: docker ps
+  become: no
+  register: docker_sudo_test
+  changed_when: false
+  failed_when: false
+
+- name: Validate Docker network exists
+  command: docker network inspect {{ dokploy_network }}
+  register: network_check
+  changed_when: false
+  failed_when: false
+  become: no
+
+- name: Fail if Dokploy network missing
+  fail:
+    msg: "❌ Docker network {{ dokploy_network }} does not exist"
+  when: network_check.rc != 0
+
+- name: Validate Node.js installation
+  command: node --version
+  register: node_check
+  changed_when: false
+  failed_when: node_check.rc != 0
+
+- name: Validate pnpm installation
+  command: pnpm --version
+  register: pnpm_check
+  changed_when: false
+  failed_when: pnpm_check.rc != 0
+
+- name: Check Dokploy systemd service status
+  command: systemctl is-active dokploy
+  register: dokploy_service
+  changed_when: false
+  failed_when: false
+  when: has_systemd | default(true)
+
+- name: Fail if Dokploy service not running
+  fail:
+    msg: "❌ Dokploy service is not active. Check: systemctl status dokploy"
+  when: 
+    - has_systemd | default(true)
+    - dokploy_service.stdout != "active"
+
+- name: Check Dokploy process
+  shell: "ps aux | grep -v grep | grep -i dokploy | grep -i node"
+  register: dokploy_process
+  changed_when: false
+  failed_when: false
+
+- name: Validate Dokploy installation directory
+  stat:
+    path: "{{ dokploy_install_dir }}"
+  register: dokploy_dir
+
+- name: Fail if Dokploy directory missing
+  fail:
+    msg: "❌ Dokploy installation directory not found: {{ dokploy_install_dir }}"
+  when: not dokploy_dir.stat.exists
+
+- name: Display validation summary
+  debug:
+    msg:
+      - "================================================"
+      - "✓ VALIDATION PASSED - NATIVE INSTALLATION"
+      - "================================================"
+      - "Docker: {{ '✓ Active' if (docker_service.stdout == 'active' if has_systemd else docker_service_nosystemd.rc == 0) else '✗ Inactive' }}"
+      - "Docker Compose: ✓ {{ compose_check.stdout }}"
+      - "User in docker group: ✓ {{ ansible_user_id }}"
+      - "Docker without sudo: {{ '✓ Works' if docker_sudo_test.rc == 0 else '✗ Failed' }}"
+      - "Dokploy network: ✓ {{ dokploy_network }}"
+      - "Node.js: ✓ {{ node_check.stdout }}"
+      - "pnpm: ✓ {{ pnpm_check.stdout }}"
+      - "Dokploy service: ✓ {{ dokploy_service.stdout if has_systemd else 'Running' }}"
+      - "Dokploy installation: ✓ {{ dokploy_install_dir }}"
+      - "Dokploy URL: http://{{ ansible_default_ipv4.address }}:{{ dokploy_port }}"
+      - "================================================"
+
+- name: Create validation report
+  copy:
+    content: |
+      # Dokploy Infrastructure Validation Report (Native Installation)
+      Generated: {{ ansible_date_time.iso8601 }}
+      
+      ## System Information
+      - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      - Architecture: {{ ansible_architecture }}
+      - WSL: {{ is_wsl | default(false) }}
+      - Systemd: {{ has_systemd | default(true) }}
+      
+      ## Docker
+      - Version: {{ docker_version_output.stdout }}
+      - Compose: {{ compose_check.stdout }}
+      - Service: {{ docker_service.stdout if has_systemd else 'Active (non-systemd)' }}
+      - User Access: {{ ansible_user_id }} in docker group
+      
+      ## Runtime
+      - Node.js: {{ node_check.stdout }}
+      - pnpm: {{ pnpm_check.stdout }}
+      
+      ## Dokploy (Native Installation)
+      - Installation: {{ dokploy_install_dir }}
+      - Service: {{ dokploy_service.stdout if has_systemd else 'Running' }}
+      - Network: {{ dokploy_network }}
+      - Port: {{ dokploy_port }}
+      - URL: http://{{ ansible_default_ipv4.address }}:{{ dokploy_port }}
+      
+      ## Service Management
+      - Status: systemctl status dokploy
+      - Logs: journalctl -u dokploy -f
+      - Restart: systemctl restart dokploy
+      - Stop: systemctl stop dokploy
+      - Start: systemctl start dokploy
+      
+      ## Useful Commands
+      - Check Dokploy process: ps aux | grep dokploy
+      - View config: cat /etc/systemd/system/dokploy.service
+      - Docker containers: docker ps
+      - Docker networks: docker network ls
+      
+      ## Next Steps
+      1. Access Dokploy: http://{{ ansible_default_ipv4.address }}:{{ dokploy_port }}
+      2. Complete initial setup
+      3. Deploy your first application
+    dest: "/tmp/dokploy-validation-{{ ansible_date_time.date }}.md"
+    mode: '0644'
+  become: no
+
+- name: Show validation report location
+  debug:
+    msg: "Validation report saved to: /tmp/dokploy-validation-{{ ansible_date_time.date }}.md"

@@ -1,0 +1,28 @@
+# Versions
+node_version: "20"
+
+# Dokploy
+dokploy_repo: "https://github.com/dokploy/dokploy.git"
+dokploy_dir: "/home/{{ ansible_user }}/dokploy"
+
+# Packages
+common_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - build-essential
+
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Puertos reservados (documentación viva)
+reserved_ports:
+  - 3000   # apps node
+  - 4000   # docker apps
+  - 5000   # apis

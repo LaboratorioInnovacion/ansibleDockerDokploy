@@ -1,0 +1,6 @@
+- name: Install Node.js {{ node_version }}
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+    apt install -y nodejs
+  args:
+    creates: /usr/bin/node

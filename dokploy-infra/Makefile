@@ -13,7 +13,7 @@ install-deps: ## Instalar dependencias Ansible
 	@echo "✓ Dependencies installed"
 
 install-local: ## Ejecutar playbook en localhost (WSL/local)
-	@cd ansible && ansible-playbook -i inventory/local.ini playbooks/setup.yml
+	@cd ansible && ansible-playbook -i inventory/local.ini playbooks/setup.yml --ask-become-pass
 
 install-vps: ## Ejecutar playbook en VPS remoto
 	@cd ansible && ansible-playbook -i inventory/vps.ini playbooks/setup.yml --ask-become-pass

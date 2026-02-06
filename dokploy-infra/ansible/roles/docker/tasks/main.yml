@@ -90,11 +90,12 @@
   become: no
   register: docker_test
   changed_when: false
+  failed_when: false
   retries: 3
   delay: 2
   until: docker_test.rc == 0
 
 - name: Confirm Docker is functional
   debug:
-    msg: "✓ Docker is running and accessible without sudo"
+    msg: "{{ '✓ Docker is running and accessible without sudo' if docker_test.rc == 0 else '⚠️  Docker installed but requires logout/login to use without sudo. Run: exit && wsl (reopen)' }}"
 

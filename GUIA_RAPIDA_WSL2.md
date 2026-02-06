@@ -100,8 +100,8 @@ ansible-galaxy collection list | grep -E "community.docker|ansible.posix"
 ```bash
 # Desde: ~/ansibleDockerDokploy/dokploy-infra/ansible
 
-# Opción 1: Con ansible-playbook directo
-ansible-playbook -i inventory/local.ini playbooks/setup.yml
+# Opción 1: Con ansible-playbook directo (te pedirá contraseña sudo)
+ansible-playbook -i inventory/local.ini playbooks/setup.yml --ask-become-pass
 
 # Opción 2: Con Makefile (si prefieres)
 cd ..
@@ -315,14 +315,15 @@ sudo apt install -y ansible
 
 # 3. Clonar repo
 cd ~
+mkdir ansiblecarpeta && cd ansiblecarpeta
 git clone https://github.com/LaboratorioInnovacion/ansibleDockerDokploy.git
 cd ansibleDockerDokploy/dokploy-infra/ansible
 
 # 4. Instalar collections
 ansible-galaxy collection install community.docker ansible.posix
 
-# 5. Ejecutar instalación
-ansible-playbook -i inventory/local.ini playbooks/setup.yml
+# 5. Ejecutar instalación (te pedirá contraseña sudo)
+ansible-playbook -i inventory/local.ini playbooks/setup.yml --ask-become-pass
 
 # 6. Verificar
 systemctl status dokploy

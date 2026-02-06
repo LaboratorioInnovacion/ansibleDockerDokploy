@@ -13,25 +13,38 @@
     name: "{{ dokploy_user }}"
     system: yes
     shell: /bin/bash
-    home: "{{ dokploy_install_dir }}"
+    home: "/home/{{ dokploy_user }}"
     group: "{{ dokploy_group }}"
     groups: docker
     append: yes
-    create_home: no
+    create_home: yes
+
+- name: Check if install dir exists
+  stat:
+    path: "{{ dokploy_install_dir }}"
+  register: install_dir
 
 - name: Check if already cloned
   stat:
     path: "{{ dokploy_install_dir }}/.git"
   register: dokploy_git
+  when: install_dir.stat.exists
+
+- name: Set clone needed fact
+  set_fact:
+    needs_clone: "{{ not install_dir.stat.exists or dokploy_git is skipped or not dokploy_git.stat.exists }}"
+
+- name: Remove incomplete install dir (exists but no .git)
+  file:
+    path: "{{ dokploy_install_dir }}"
+    state: absent
+  when: needs_clone | bool and install_dir.stat.exists
 
 - name: Clone Dokploy
-  git:
-    repo: "{{ dokploy_repo }}"
-    dest: "{{ dokploy_install_dir }}"
-    version: "{{ dokploy_version }}"
-    force: no
-  become_user: "{{ dokploy_user }}"
-  when: not dokploy_git.stat.exists
+  command: >
+    git clone --branch {{ dokploy_version }} --depth 1
+    {{ dokploy_repo }} {{ dokploy_install_dir }}
+  when: needs_clone | bool
   register: dokploy_cloned
 
 - name: Set ownership on install dir
@@ -51,22 +64,25 @@
     mode: '0755'
 
 - name: Update Dokploy
-  git:
-    repo: "{{ dokploy_repo }}"
-    dest: "{{ dokploy_install_dir }}"
-    version: "{{ dokploy_version }}"
-    update: yes
+  shell: cd {{ dokploy_install_dir }} && git fetch --tags && git checkout {{ dokploy_version }}
   become_user: "{{ dokploy_user }}"
-  when: dokploy_git.stat.exists
+  when: not needs_clone | bool
   register: dokploy_updated
+  changed_when: dokploy_updated.rc == 0
+  failed_when: false
 
 - name: Check if node_modules exists
   stat:
     path: "{{ dokploy_install_dir }}/node_modules"
   register: node_modules
 
+- name: Find pnpm path
+  command: which pnpm
+  register: pnpm_path
+  changed_when: false
+
 - name: Install dependencies
-  command: pnpm install
+  command: "{{ pnpm_path.stdout }} install"
   args:
     chdir: "{{ dokploy_install_dir }}"
   become_user: "{{ dokploy_user }}"
@@ -81,7 +97,7 @@
   register: dist_dir
 
 - name: Build application
-  command: pnpm run build
+  command: "{{ pnpm_path.stdout }} run build"
   args:
     chdir: "{{ dokploy_install_dir }}"
   become_user: "{{ dokploy_user }}"

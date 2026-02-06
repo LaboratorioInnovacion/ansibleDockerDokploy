@@ -16,7 +16,7 @@ Environment="PORT={{ dokploy_port }}"
 Environment="DATABASE_PATH={{ dokploy_database_dir }}/dokploy.db"
 
 # Start command
-ExecStart=/usr/bin/pnpm run start
+ExecStart={{ pnpm_path.stdout }} run start
 
 # Restart policy
 Restart=always

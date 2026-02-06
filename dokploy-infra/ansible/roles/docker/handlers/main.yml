@@ -1,11 +1,6 @@
 ---
-- name: Restart Docker
-  systemd:
+- name: restart docker
+  service:
     name: docker
     state: restarted
-  when: has_systemd | default(true)
-
-- name: Restart Docker (non-systemd)
-  shell: "service docker restart"
-  when: not has_systemd | default(false)
   ignore_errors: yes

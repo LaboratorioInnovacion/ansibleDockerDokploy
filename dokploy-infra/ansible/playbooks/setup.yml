@@ -1,5 +1,5 @@
 ---
-- name: Setup Docker + Dokploy Infrastructure (Native Installation)
+- name: Setup Docker + Dokploy (Native Installation)
   hosts: servers
   become: yes
   gather_facts: yes
@@ -7,71 +7,49 @@
     - ../vars/main.yml
 
   pre_tasks:
-    - name: Display banner
+    - name: Show info
       debug:
         msg:
-          - "================================================"
-          - "🚀 Dokploy Infrastructure Setup (Native)"
-          - "================================================"
-          - "Target: {{ inventory_hostname }}"
-          - "User: {{ ansible_user_id }}"
-          - "Mode: Dokploy runs natively (not in container)"
-          - "================================================"
+          - "=========================================="
+          - "  Dokploy Infrastructure Setup (Native)"
+          - "=========================================="
+          - "Host: {{ inventory_hostname }}"
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "Arch: {{ ansible_facts['architecture'] }}"
+          - "=========================================="
 
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
-      when: ansible_os_family == "Debian"
 
   roles:
-    - role: system_detection
-      tags: ['system', 'detection']
-    
     - role: docker
-      tags: ['docker', 'infrastructure']
-    
+      tags: ['docker']
+
     - role: node
-      tags: ['node', 'runtime']
-    
-    - role: firewall
-      tags: ['firewall', 'security']
-      when: firewall_enabled | default(true)
-    
+      tags: ['node']
+
     - role: dokploy
-      tags: ['dokploy', 'application']
-    
-    - role: validation
-      tags: ['validation', 'verify']
+      tags: ['dokploy']
 
   post_tasks:
-    - name: Display completion message
+    - name: Done
       debug:
         msg:
-          - "================================================"
-          - "✓ SETUP COMPLETED SUCCESSFULLY"
-          - "================================================"
-          - "Dokploy is ready at: http://{{ ansible_default_ipv4.address }}:{{ dokploy_port }}"
+          - "=========================================="
+          - "  INSTALLATION COMPLETE"
+          - "=========================================="
           - ""
-          - "Installation type: NATIVE (not containerized)"
-          - "Installation path: {{ dokploy_install_dir }}"
+          - "Dokploy: http://localhost:{{ dokploy_port }}"
+          - "Path:    {{ dokploy_install_dir }}"
           - ""
-          - "Next steps:"
-          - "1. Access Dokploy web interface"
-          - "2. Complete initial configuration"
-          - "3. Deploy your applications"
+          - "Commands:"
+          - "  systemctl status dokploy"
+          - "  journalctl -u dokploy -f"
+          - "  sudo systemctl restart dokploy"
           - ""
-          - "Service management:"
-          - "  systemctl status dokploy    # Check status"
-          - "  journalctl -u dokploy -f    # View logs"
-          - "  systemctl restart dokploy   # Restart service"
-          - ""
-          - "Docker (for Dokploy to manage):"
-          - "  docker ps                   # List containers"
-          - "  docker network ls           # List networks"
-          - "================================================"
-
-    - name: Remind about re-login if needed
-      debug:
-        msg: "⚠️  If 'docker ps' doesn't work without sudo, logout and login again to refresh group membership"
-      when: ansible_user_id != "root"
+          - "If 'docker ps' fails without sudo:"
+          - "  exit WSL, run: wsl --shutdown"
+          - "  reopen WSL and try again"
+          - "=========================================="

@@ -1,7 +1,3 @@
 ---
-- name: Reload systemd and restart Dokploy
-  systemd:
-    name: dokploy
-    state: restarted
-    daemon_reload: yes
-  when: has_systemd | default(true)
+- name: restart dokploy
+  shell: systemctl daemon-reload && systemctl restart dokploy

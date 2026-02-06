@@ -1,14 +1,13 @@
+---
 # ===================================
-# VERSIONS
+# Dokploy Infrastructure Variables
 # ===================================
-docker_compose_version: "v2.24.5"
-node_version: "20"
-pnpm_version: "8"
 
-# ===================================
-# DOKPLOY CONFIGURATION (Instalación Nativa)
-# ===================================
-dokploy_version: "v0.8.0"  # Tag específico o 'canary' para latest
+# Node.js
+node_version: "20"
+
+# Dokploy
+dokploy_version: "v0.8.0"
 dokploy_port: 3000
 dokploy_install_dir: "/opt/dokploy"
 dokploy_repo: "https://github.com/Dokploy/dokploy.git"
@@ -16,40 +15,3 @@ dokploy_user: "dokploy"
 dokploy_group: "dokploy"
 dokploy_database_dir: "/opt/dokploy/database"
 dokploy_network: "dokploy_net"
-
-# ===================================
-# PACKAGES
-# ===================================
-common_packages:
-  - ca-certificates
-  - curl
-  - gnupg
-  - lsb-release
-  - git
-  - apt-transport-https
-  - software-properties-common
-  - python3-pip
-
-docker_packages:
-  - docker-ce
-  - docker-ce-cli
-  - containerd.io
-  - docker-buildx-plugin
-  - docker-compose-plugin
-
-# ===================================
-# FIREWALL CONFIGURATION
-# ===================================
-firewall_enabled: true
-allowed_ports:
-  - { port: 22, proto: "tcp", comment: "SSH" }
-  - { port: 80, proto: "tcp", comment: "HTTP" }
-  - { port: 443, proto: "tcp", comment: "HTTPS" }
-  - { port: 3000, proto: "tcp", comment: "Dokploy" }
-
-# ===================================
-# SYSTEM REQUIREMENTS
-# ===================================
-min_docker_version: "24.0.0"
-min_memory_mb: 2048
-min_disk_gb: 20

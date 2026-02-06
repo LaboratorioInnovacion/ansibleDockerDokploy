@@ -1,14 +1,13 @@
 ---
-- name: Check if Node.js is already installed
+# ============================================================
+# Node.js + pnpm Installation - Compatible with Ansible 2.14+
+# ============================================================
+
+- name: Check if Node.js is installed
   command: node --version
   register: node_check
   changed_when: false
   failed_when: false
-
-- name: Display current Node.js version if installed
-  debug:
-    msg: "Node.js already installed: {{ node_check.stdout }}"
-  when: node_check.rc == 0
 
 - name: Download NodeSource setup script
   get_url:
@@ -17,7 +16,7 @@
     mode: '0755'
   when: node_check.rc != 0
 
-- name: Run NodeSource setup script
+- name: Run NodeSource setup
   command: bash /tmp/nodesource_setup.sh
   when: node_check.rc != 0
 
@@ -28,26 +27,10 @@
     update_cache: yes
   when: node_check.rc != 0
 
-- name: Clean up NodeSource script
+- name: Clean up setup script
   file:
     path: /tmp/nodesource_setup.sh
     state: absent
-
-- name: Verify Node.js installation
-  command: node --version
-  register: node_version_output
-  changed_when: false
-
-- name: Verify npm installation
-  command: npm --version
-  register: npm_version_output
-  changed_when: false
-
-- name: Display Node.js and npm versions
-  debug:
-    msg:
-      - "✓ Node.js: {{ node_version_output.stdout }}"
-      - "✓ npm: {{ npm_version_output.stdout }}"
 
 - name: Install pnpm globally
   npm:
@@ -55,11 +38,18 @@
     global: yes
     state: present
 
-- name: Verify pnpm installation
-  command: pnpm --version
-  register: pnpm_version_output
+- name: Verify installations
+  command: "{{ item }}"
+  loop:
+    - node --version
+    - npm --version
+    - pnpm --version
+  register: versions
   changed_when: false
 
-- name: Display pnpm version
+- name: Show versions
   debug:
-    msg: "✓ pnpm: {{ pnpm_version_output.stdout }}"
+    msg:
+      - "Node.js: {{ versions.results[0].stdout }}"
+      - "npm:     {{ versions.results[1].stdout }}"
+      - "pnpm:    {{ versions.results[2].stdout }}"

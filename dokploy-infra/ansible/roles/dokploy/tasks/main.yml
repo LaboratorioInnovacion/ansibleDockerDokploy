@@ -1,15 +1,25 @@
 ---
-- name: Create Dokploy system user
+# ============================================================
+# Dokploy Native Installation - Compatible with Ansible 2.14+
+# ============================================================
+
+- name: Create dokploy group
+  group:
+    name: "{{ dokploy_group }}"
+    system: yes
+
+- name: Create dokploy user
   user:
     name: "{{ dokploy_user }}"
     system: yes
     shell: /bin/bash
     home: "{{ dokploy_install_dir }}"
+    group: "{{ dokploy_group }}"
     groups: docker
     append: yes
     create_home: no
 
-- name: Create Dokploy directories
+- name: Create directories
   file:
     path: "{{ item }}"
     state: directory
@@ -20,12 +30,12 @@
     - "{{ dokploy_install_dir }}"
     - "{{ dokploy_database_dir }}"
 
-- name: Check if Dokploy is already cloned
+- name: Check if already cloned
   stat:
     path: "{{ dokploy_install_dir }}/.git"
   register: dokploy_git
 
-- name: Clone Dokploy repository
+- name: Clone Dokploy
   git:
     repo: "{{ dokploy_repo }}"
     dest: "{{ dokploy_install_dir }}"
@@ -33,8 +43,9 @@
     force: no
   become_user: "{{ dokploy_user }}"
   when: not dokploy_git.stat.exists
+  register: dokploy_cloned
 
-- name: Update Dokploy repository
+- name: Update Dokploy
   git:
     repo: "{{ dokploy_repo }}"
     dest: "{{ dokploy_install_dir }}"
@@ -44,68 +55,72 @@
   when: dokploy_git.stat.exists
   register: dokploy_updated
 
-- name: Install Dokploy dependencies with pnpm
+- name: Check if node_modules exists
+  stat:
+    path: "{{ dokploy_install_dir }}/node_modules"
+  register: node_modules
+
+- name: Install dependencies
   command: pnpm install
   args:
     chdir: "{{ dokploy_install_dir }}"
   become_user: "{{ dokploy_user }}"
-  when: not dokploy_git.stat.exists or dokploy_updated.changed
+  when: >
+    not node_modules.stat.exists
+    or (dokploy_cloned is defined and dokploy_cloned.changed)
+    or (dokploy_updated is defined and dokploy_updated.changed)
 
-- name: Build Dokploy application
+- name: Check if dist exists
+  stat:
+    path: "{{ dokploy_install_dir }}/dist"
+  register: dist_dir
+
+- name: Build application
   command: pnpm run build
   args:
     chdir: "{{ dokploy_install_dir }}"
   become_user: "{{ dokploy_user }}"
   environment:
     NODE_ENV: production
-  when: not dokploy_git.stat.exists or dokploy_updated.changed
+  when: >
+    not dist_dir.stat.exists
+    or (dokploy_cloned is defined and dokploy_cloned.changed)
+    or (dokploy_updated is defined and dokploy_updated.changed)
 
-- name: Create Dokploy Docker network
-  docker_network:
-    name: "{{ dokploy_network }}"
-    state: present
-  become_user: "{{ dokploy_user }}"
+- name: Create Docker network for Dokploy
+  command: docker network create {{ dokploy_network }}
+  register: net_result
+  changed_when: net_result.rc == 0
+  failed_when: false
 
-- name: Create Dokploy systemd service
+- name: Install systemd service
   template:
     src: dokploy.service.j2
     dest: /etc/systemd/system/dokploy.service
-    owner: root
-    group: root
     mode: '0644'
   notify: restart dokploy
 
-- name: Enable and start Dokploy service
-  systemd:
+- name: Reload systemd
+  command: systemctl daemon-reload
+  changed_when: false
+
+- name: Enable and start Dokploy
+  service:
     name: dokploy
     enabled: yes
     state: started
-    daemon_reload: yes
-  when: has_systemd | default(true)
 
-- name: Wait for Dokploy to be ready
+- name: Wait for Dokploy to respond
   uri:
     url: "http://localhost:{{ dokploy_port }}"
-    status_code: 200
+    status_code: [200, 302]
     timeout: 5
-  register: dokploy_health
-  until: dokploy_health.status == 200
+  register: health
+  until: health.status is defined and health.status in [200, 302]
   retries: 30
-  delay: 2
+  delay: 3
   ignore_errors: yes
 
-- name: Display Dokploy status
+- name: Status
   debug:
-    msg:
-      - "✓ Dokploy installed at: {{ dokploy_install_dir }}"
-      - "✓ Running on port: {{ dokploy_port }}"
-      - "✓ Access at: http://{{ ansible_default_ipv4.address }}:{{ dokploy_port }}"
-      - "✓ Service: systemctl status dokploy"
-  when: dokploy_health is succeeded
-
-- name: Warn if Dokploy is not responding
-  debug:
-    msg:
-      - "⚠️  Dokploy service started but not responding on port {{ dokploy_port }}"
-      - "Check logs: journalctl -u dokploy -f"
-  when: dokploy_health is failed
+    msg: "{{ 'Dokploy running at http://localhost:' ~ dokploy_port if health is succeeded else 'Dokploy started but not responding yet. Check: journalctl -u dokploy -f' }}"

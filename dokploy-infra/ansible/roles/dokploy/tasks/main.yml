@@ -19,17 +19,6 @@
     append: yes
     create_home: no
 
-- name: Create directories
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ dokploy_user }}"
-    group: "{{ dokploy_group }}"
-    mode: '0755'
-  loop:
-    - "{{ dokploy_install_dir }}"
-    - "{{ dokploy_database_dir }}"
-
 - name: Check if already cloned
   stat:
     path: "{{ dokploy_install_dir }}/.git"
@@ -44,6 +33,22 @@
   become_user: "{{ dokploy_user }}"
   when: not dokploy_git.stat.exists
   register: dokploy_cloned
+
+- name: Set ownership on install dir
+  file:
+    path: "{{ dokploy_install_dir }}"
+    owner: "{{ dokploy_user }}"
+    group: "{{ dokploy_group }}"
+    recurse: yes
+  when: dokploy_cloned is changed
+
+- name: Create database directory
+  file:
+    path: "{{ dokploy_database_dir }}"
+    state: directory
+    owner: "{{ dokploy_user }}"
+    group: "{{ dokploy_group }}"
+    mode: '0755'
 
 - name: Update Dokploy
   git:
